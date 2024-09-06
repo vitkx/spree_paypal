@@ -56,6 +56,10 @@ module SpreePaypal
     end
 
     def build_purchase_units(order)
+      discount_total = order.promo_total.abs.to_s
+      tax_total = order.additional_tax_total.to_s
+      shipping_total = order.shipment_total.to_s
+
       items = order.line_items.map do |line_item|
         {
           name: line_item.product.name,
@@ -77,10 +81,18 @@ module SpreePaypal
               currency_code: order.currency || 'USD',
               value: order.item_total.to_s
             },
+            discount: {
+              currency_code: order.currency || 'USD',
+              value: discount_total
+            },
             shipping: {
               currency_code: order.currency || 'USD',
-              value: order.shipment_total.to_s
-            }
+              value: shipping_total
+            },
+            tax_total: {
+              currency_code: order.currency || 'USD',
+              value: tax_total
+            },
           }
         },
         items: items

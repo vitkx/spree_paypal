@@ -7,6 +7,7 @@ Gem::Specification.new do |spec|
   spec.version = SpreePaypal::VERSION
   spec.authors = ["vitkx"]
   spec.email = ["vitoxxx1206@gmail.com"]
+  spec.homepage      = "https://github.com/vitkx/spree_paypal"
 
   spec.summary = "Paypal integration for spree"
   spec.description = "Provides Paypal payment integration for spree"
@@ -26,7 +27,6 @@ Gem::Specification.new do |spec|
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
-
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
 

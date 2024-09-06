@@ -1,39 +1,40 @@
 # SpreePaypal
 
-TODO: Delete this and the text below, and describe your gem
+SpreePaypal is a gem that integrates PayPal's REST API with the Spree eCommerce platform. It creates a new PayPal payment method, supports the PayPal JavaScript SDK for frontend payment processing, and allows you to configure sandbox or live modes for testing and production.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/spree_paypal`. To experiment with that code, run `bin/console` for an interactive prompt.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+1. Add this line to your application's Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
+    ```ruby
+    gem 'spree_paypal', github: 'vitkx/spree_paypal', branch: 'master'
+    ```
 
-    $ bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+2. Install the gem by running:
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+    ```bash
+    bundle install
+    ```
 
-    $ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+3. Copy & run migrations
+
+    ```bash
+    bundle exec rails g spree_paypal:install
+    ```
+
+4. Restart your server
+
 
 ## Usage
 
-TODO: Write usage instructions here
+After installation, configure PayPal by adding your `client_id`, `client_secret`, and sandbox settings in the Spree admin panel under **Payment Methods**.
 
-## Development
-
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/spree_paypal. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/spree_paypal/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/vitkx/spree_paypal.
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the SpreePaypal project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/spree_paypal/blob/master/CODE_OF_CONDUCT.md).
