@@ -1,0 +1,56 @@
+<script src="https://www.paypal.com/sdk/js?client-id=<%= payment_method.preferred_client_id %>"></script>
+
+<div id="paypal-button-container"></div>
+
+<script>
+  paypal.Buttons({
+    createOrder: async function(data, actions) {
+      try {
+        const response = await fetch('/paypal/create_order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '<%= form_authenticity_token %>'
+          },
+          body: JSON.stringify({
+            payment_method_id: '<%= payment_method.id %>'
+          })
+        });
+    
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.statusText}`);
+        }
+    
+        const orderData = await response.json();
+    
+        if (!orderData.orderID) {
+          throw new Error('Order ID not found in response');
+        }
+    
+        return orderData.orderID;
+    
+      } catch (error) {
+        console.error('Error creating PayPal order:', error);
+        alert('There was an issue creating the PayPal order. Please try again later.');
+        return null;
+      }
+    },
+    onApprove: function(data, actions) {
+      return fetch('/paypal/capture_order', {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= form_authenticity_token %>'
+        },
+        body: JSON.stringify({
+          orderID: data.orderID,
+          payment_method_id: '<%= payment_method.id %>'
+        })
+      }).then(function(res) {
+        return res.json();
+      }).then(function(details) {
+        window.location.href = '<%= spree.order_path(@order) %>';
+      });
+    }
+  }).render('#paypal-button-container');
+</script>

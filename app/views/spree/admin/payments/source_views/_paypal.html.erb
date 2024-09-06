@@ -1,0 +1,25 @@
+<fieldset data-hook="paypal">
+  <legend>Paypal</legend>
+  <table class="table table-condensed table-bordered">
+    <tr>
+      <th width="20%"><%= Spree.t(:transaction_id) %>:</th>
+      <td><%= payment.source.transaction_id %></td>
+    </tr>
+    <tr>
+      <th width="20%"><%= Spree.t(:email_address) %>:</th>
+      <td><%= payment.source.email %></td>
+    </tr>
+    <tr>
+      <th width="20%"><%= Spree.t(:first_name) %>:</th>
+      <td><%= payment.source.first_name %></td>
+    </tr>
+    <tr>
+      <th width="20%"><%= Spree.t(:last_name) %>:</th>
+      <td><%= payment.source.last_name %></td>
+    </tr>
+    <tr>
+      <th><%= Spree.t(:state) %>:</th>
+      <td><%= payment.state %></td>
+    </tr>
+  </table>
+</fieldset>
