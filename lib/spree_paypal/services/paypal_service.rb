@@ -22,7 +22,7 @@ module SpreePaypal
       request["Authorization"] = "Bearer #{auth_token}"
       request["Content-Type"] = "application/json"
       request.body = {
-        intent: 'CAPTURE',
+        intent: 'AUTHORIZE',
         purchase_units: purchase_units
       }.to_json
 
@@ -30,10 +30,10 @@ module SpreePaypal
       JSON.parse(response.body)
     end
 
-    def capture_order(order_id)
+    def authorize_order(order_id)
       auth_token = authenticate
       
-      uri = URI.parse("#{@api_base_url}/v2/checkout/orders/#{order_id}/capture")
+      uri = URI.parse("#{@api_base_url}/v2/checkout/orders/#{order_id}/authorize")
       request = Net::HTTP::Post.new(uri)
       request["Authorization"] = "Bearer #{auth_token}"
       request["Content-Type"] = "application/json"
@@ -42,19 +42,117 @@ module SpreePaypal
       JSON.parse(response.body)
     end
 
-    def refund(payment)
+    def capture_authorized_payment(authorization_id, amount, currency)
       auth_token = authenticate
-      capture_id = payment.response_code
+
+      uri = URI.parse("#{@api_base_url}/v2/payments/authorizations/#{authorization_id}/capture")
+      request = Net::HTTP::Post.new(uri)
+      request["Authorization"] = "Bearer #{auth_token}"
+      request["Content-Type"] = "application/json"
+
+      request.body = {
+        amount: {
+          value: amount.to_s,
+          currency_code: currency
+        },
+        final_capture: true
+      }.to_json
+
+      response = send_request(uri, request)
+      JSON.parse(response.body)
+    end
+
+    def void_authorization(authorization_id)
+      auth_token = authenticate
+
+      uri = URI.parse("#{@api_base_url}/v2/payments/authorizations/#{authorization_id}/void")
+      request = Net::HTTP::Post.new(uri)
+      request["Authorization"] = "Bearer #{auth_token}"
+      request["Content-Type"] = "application/json"
+
+      response = send_request(uri, request)
+      # PayPal returns 204 No Content on a successful void; body is empty.
+      return {} if response.code.to_i == 204
+
+      JSON.parse(response.body)
+    rescue JSON::ParserError
+      {}
+    end
+
+    def reauthorize_authorization(authorization_id, amount, currency)
+      auth_token = authenticate
+
+      uri = URI.parse("#{@api_base_url}/v2/payments/authorizations/#{authorization_id}/reauthorize")
+      request = Net::HTTP::Post.new(uri)
+      request["Authorization"] = "Bearer #{auth_token}"
+      request["Content-Type"] = "application/json"
+
+      request.body = {
+        amount: {
+          value: amount.to_s,
+          currency_code: currency
+        }
+      }.to_json
+
+      response = send_request(uri, request)
+      JSON.parse(response.body)
+    end
+
+    def void_and_authorize(authorization_id, order)
+      void_response = void_authorization(authorization_id)
+      if void_response['name'] == 'RESOURCE_NOT_FOUND'
+        return ActiveMerchant::Billing::Response.new(false, 'The specified PayPal resource does not exist', void_response)
+      end
+      create_order_response = create_order(order)
+      if create_order_response['status'] != 'CREATED'
+        return ActiveMerchant::Billing::Response.new(false, 'Failed to create new PayPal order for reauthorization', create_order_response)
+      end
+      new_order_id = create_order_response['id']
+      new_authorize_response = authorize_order(new_order_id)
+      if new_authorize_response['status'] != 'COMPLETED'
+        return ActiveMerchant::Billing::Response.new(false, 'Failed to authorize new PayPal order for reauthorization', new_authorize_response)
+      end
+      new_authorization_id = new_authorize_response['purchase_units'][0]['payments']['authorizations'][0]['id']
+      ActiveMerchant::Billing::Response.new(true, 'PayPal payment reauthorized', new_authorize_response.merge('authorization_id' => new_authorization_id))
+      new_authorization_id
+    end
+
+    def refund_by_capture_id(capture_id, amount, originator)
+      auth_token = authenticate
 
       uri = URI.parse("#{@api_base_url}/v2/payments/captures/#{capture_id}/refund")
       request = Net::HTTP::Post.new(uri)
       request["Authorization"] = "Bearer #{auth_token}"
       request["Content-Type"] = "application/json"
+
       request.body = {
         amount: {
-          value: payment.amount.to_s,
-          currency_code: payment.currency
+          value: amount.to_s('F'),
+          currency_code: originator.order.currency
         }
+      }.to_json
+
+      response = send_request(uri, request)
+      JSON.parse(response.body)
+    end
+
+    def add_tracking(transaction_id, tracking_number, carrier, status = "SHIPPED")
+      auth_token = authenticate
+  
+      uri = URI.parse("#{@api_base_url}/v1/shipping/trackers-batch")
+      request = Net::HTTP::Post.new(uri)
+      request["Authorization"] = "Bearer #{auth_token}"
+      request["Content-Type"] = "application/json"
+
+      request.body = {
+        trackers: [
+          {
+            transaction_id: transaction_id,
+            tracking_number: tracking_number,
+            status: status,
+            carrier: carrier
+          }
+        ]
       }.to_json
 
       response = send_request(uri, request)
@@ -75,30 +173,63 @@ module SpreePaypal
     end
 
     def build_purchase_units(order)
-      discount_total = order.promo_total.abs.to_s
-      tax_total = order.additional_tax_total.to_s
-      shipping_total = order.shipment_total.to_s
+      if order.shipments.pending.any? {|a| a.replacement}
+        discount_total = 0.to_s
+        tax_total = order.additional_tax_total.to_s
+        shipping_total = 0
+        item_total = 0
 
-      items = order.line_items.map do |line_item|
-        {
-          name: line_item.product.name,
-          quantity: line_item.quantity.to_s,
-          unit_amount: {
-            currency_code: order.currency || 'USD',
-            value: line_item.price.to_s
+        order.shipments.pending.map do |shipment|
+          next if shipment.free_replacement?
+
+          shipping_total += shipment.cost
+          
+          items = shipment.manifest.map do |manifest_item|
+            line_item = manifest_item.first
+            quantity = manifest_item.states["on_hand"]
+            item_total += line_item.price * quantity
+            {
+              name: line_item.product.name,
+              quantity: quantity.to_s,
+              sku: line_item.variant&.sku.to_s[0, 127],
+              unit_amount: {
+                currency_code: order.currency || 'USD',
+                value: line_item.price.to_s
+              }
+            }
+          end
+        end
+
+        shipping_total = shipping_total.to_s
+        item_total = item_total.to_s
+      else
+        discount_total = order.promo_total.abs.to_s
+        tax_total = order.additional_tax_total.to_s
+        shipping_total = order.shipment_total.to_s
+        item_total = order.line_items.sum { |li| li.price * li.quantity }.to_s
+
+        items = order.line_items.map do |line_item|
+          {
+            name: line_item.product.name,
+            quantity: line_item.quantity.to_s,
+            sku: line_item.variant&.sku.to_s[0, 127],
+            unit_amount: {
+              currency_code: order.currency || 'USD',
+              value: line_item.price.to_s
+            }
           }
-        }
+        end
       end
 
       [{
         reference_id: order.id,
         amount: {
           currency_code: order.currency || 'USD',
-          value: order.total.to_s,
+          value: order.outstanding_balance.to_s,
           breakdown: {
             item_total: {
               currency_code: order.currency || 'USD',
-              value: order.item_total.to_s
+              value: item_total
             },
             discount: {
               currency_code: order.currency || 'USD',
