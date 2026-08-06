@@ -85,7 +85,11 @@ module Spree
 
       result = provider_class.new(self).refund_by_capture_id(response_code, amount, options[:originator])
 
-      ActiveMerchant::Billing::Response.new(true, 'PayPal payment refunded', result)
+      if result['name'] == 'RESOURCE_NOT_FOUND'
+        ActiveMerchant::Billing::Response.new(false, 'The specified PayPal resource does not exist', result)
+      else
+        ActiveMerchant::Billing::Response.new(true, 'PayPal payment refunded', result, authorization: result['id'])
+      end
     rescue => e
       ActiveMerchant::Billing::Response.new(false, e.message, {})
     end
